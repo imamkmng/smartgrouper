@@ -30,21 +30,24 @@ export default function App() {
           setAssessment({ id: docData.id, ...docData.data() } as Assessment);
           
           // Also listen to results for this assessment
-          const resultsQ = query(collection(db, 'assessments', docData.id, 'results'));
+          const resultsQ = query(
+            collection(db, 'assessments', docData.id, 'results'),
+            where('guruId', '==', user.uid)
+          );
           const unsubResults = onSnapshot(resultsQ, (resSnapshot) => {
              const studentResults: Student[] = [];
              resSnapshot.forEach(rDoc => {
                const data = rDoc.data();
                studentResults.push({
-                 id: data.studentId || rDoc.id,
+                 id: rDoc.id,
                  name: data.studentName,
                  score: data.score,
                  interest: data.interest
                });
              });
              setStudents(studentResults);
-          }, (err) => {
-             console.error("Error fetching results: ", err);
+          }, (error) => {
+             handleFirestoreError(error, 'list' as any, 'results');
           });
           return () => unsubResults();
         } else {
