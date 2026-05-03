@@ -56,12 +56,12 @@ export default function AssessmentEditor({ assessment, onChange, onFinish }: Ass
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-8 max-w-3xl mx-auto animate-in zoom-in-95 mt-6">
+    <div className="card border border-neutral-100 p-8 max-w-3xl mx-auto animate-in zoom-in-95 mt-6">
       <div className="flex justify-between items-center border-b pb-4 mb-6">
         <h3 className="text-xl font-bold text-neutral-800">Editor Ujian & Survei</h3>
         <button
           onClick={onFinish}
-          className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 transition"
+          className="btn-primary text-sm"
         >
           Selesai Edit
         </button>
@@ -233,7 +233,7 @@ export default function AssessmentEditor({ assessment, onChange, onFinish }: Ass
         </button>
         <button
           onClick={onFinish}
-          className="bg-indigo-600 text-white px-6 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 transition"
+          className="btn-primary text-sm"
         >
           Simpan & Selesai
         </button>

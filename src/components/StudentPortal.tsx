@@ -73,7 +73,7 @@ export default function StudentPortal({ assessment, existingStudents, onSubmit, 
   if (!assessment) {
     return (
       <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-4 font-sans">
-        <div className="bg-white p-8 rounded-xl shadow-sm text-center max-w-md w-full border border-neutral-200">
+        <div className="card border border-neutral-100 p-8">
           <AlertCircle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
           <h2 className="text-xl font-bold mb-2 text-neutral-800">Menunggu Guru</h2>
           <p className="text-neutral-500 mb-6">Guru belum menyiapkan soal pretest dan survei. Silakan kembali lagi nanti apabila soal sudah siap.</p>
@@ -89,7 +89,7 @@ export default function StudentPortal({ assessment, existingStudents, onSubmit, 
     <div className="min-h-screen bg-neutral-50 py-12 px-4 sm:px-6 lg:px-8 font-sans">
       <div className="max-w-3xl mx-auto">
         {step === 'login' && (
-          <div className="bg-white p-8 rounded-xl shadow-sm border border-neutral-200 animate-in fade-in slide-in-from-bottom-4 max-w-md mx-auto">
+          <div className="card border border-neutral-100 p- animate-in fade-in slide-in-from-bottom-4 max-w-md mx-auto">
             <h2 className="text-2xl font-bold text-center text-neutral-800 mb-2">Portal Siswa</h2>
             <p className="text-center text-neutral-500 mb-6">Materi: <strong>{assessment.topic}</strong></p>
             
@@ -107,7 +107,7 @@ export default function StudentPortal({ assessment, existingStudents, onSubmit, 
               </div>
               <button
                 type="submit"
-                className="w-full bg-indigo-600 text-white rounded-lg px-4 py-3 font-medium hover:bg-indigo-700 transition-colors flex items-center justify-center"
+                className="w-full btn-primary flex items-center justify-center"
               >
                 Mulai Ujian <ArrowRight className="w-4 h-4 ml-2" />
               </button>
@@ -120,7 +120,7 @@ export default function StudentPortal({ assessment, existingStudents, onSubmit, 
 
         {step === 'pretest' && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-neutral-200 flex justify-between items-center">
+            <div className="card border border-neutral-100 p- flex justify-between items-center">
                <div>
                   <h2 className="text-lg font-bold text-neutral-800">Bagian 1: Pretest Kognitif</h2>
                   <p className="text-neutral-500 text-sm">
@@ -134,7 +134,7 @@ export default function StudentPortal({ assessment, existingStudents, onSubmit, 
                </div>
             </div>
 
-            <div className="bg-white p-8 rounded-xl shadow-sm border border-neutral-200">
+            <div className="card border border-neutral-100 p-">
                 <div className="space-y-8">
                   {assessment.questions.map((q, idx) => (
                     <div key={q.id} className="space-y-3">
@@ -160,7 +160,7 @@ export default function StudentPortal({ assessment, existingStudents, onSubmit, 
               <div className="pt-8 mt-8 border-t flex justify-end">
                 <button
                   onClick={handleNextToSurvey}
-                  className="bg-indigo-600 text-white rounded-lg px-8 py-3 font-semibold hover:bg-indigo-700 transition-colors shadow-sm flex items-center"
+                  className="btn-primary w-full sm:w-auto flex items-center"
                 >
                   {assessment.includeSurvey ? (
                     <>Lanjut ke Survei Minat <ArrowRight className="w-5 h-5 ml-2" /></>
@@ -175,7 +175,7 @@ export default function StudentPortal({ assessment, existingStudents, onSubmit, 
 
         {step === 'survey' && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
-             <div className="bg-white p-6 rounded-xl shadow-sm border border-neutral-200 flex justify-between items-center">
+             <div className="card border border-neutral-100 p- flex justify-between items-center">
                <div>
                   <h2 className="text-lg font-bold text-neutral-800">Bagian {assessment.includePretest ? "2" : "1"}: Survei Minat</h2>
                   <p className="text-neutral-500 text-sm">
@@ -189,7 +189,7 @@ export default function StudentPortal({ assessment, existingStudents, onSubmit, 
                </div>
             </div>
 
-            <div className="bg-white p-8 rounded-xl shadow-sm border border-neutral-200">
+            <div className="card border border-neutral-100 p-">
                 <div className="space-y-3">
                   <p className="font-medium text-neutral-800">Pilih salah satu topik peminatan di bawah ini yang paling kamu minati terkait {assessment.topic}:</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-0 sm:pl-6 pt-2">
@@ -251,7 +251,7 @@ export default function StudentPortal({ assessment, existingStudents, onSubmit, 
                 )}
                 <button
                   onClick={handleSubmitAll}
-                  className="bg-purple-600 text-white rounded-lg px-8 py-3 font-semibold hover:bg-purple-700 transition-colors shadow-sm"
+                  className="btn-primary w-full sm:w-auto"
                 >
                   Kirim Jawaban
                 </button>
@@ -261,7 +261,7 @@ export default function StudentPortal({ assessment, existingStudents, onSubmit, 
         )}
 
         {step === 'done' && (
-          <div className="bg-white p-10 rounded-xl shadow-sm border border-neutral-200 text-center max-w-lg mx-auto animate-in zoom-in-95">
+          <div className="card border border-neutral-100 p- text-center max-w-lg mx-auto animate-in zoom-in-95">
             <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
             <h2 className="text-2xl font-bold text-neutral-800 mb-2">Terima Kasih!</h2>
             <p className="text-neutral-600 mb-8">

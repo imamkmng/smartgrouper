@@ -101,12 +101,14 @@ service cloud.firestore {
     match /assessments/{assessmentId}/results/{resultId} {
       allow get: if isVerified() && (
         resource.data.guruId == request.auth.uid ||
-        resource.data.studentId == request.auth.uid
+        resource.data.studentId == request.auth.uid ||
+        resource.data.studentId.matches('^manual-.*')
       );
       
       allow list: if isVerified() && (
         resource.data.guruId == request.auth.uid ||
-        resource.data.studentId == request.auth.uid
+        resource.data.studentId == request.auth.uid ||
+        resource.data.studentId.matches('^manual-.*')
       );
 
       allow create: if isVerified() &&
@@ -124,14 +126,14 @@ service cloud.firestore {
                     isValidId(assessmentId) &&
                     isValidId(resultId) &&
                     isValidResult(incoming()) &&
-                    incoming().studentId == existing().studentId &&
                     incoming().assessmentId == existing().assessmentId &&
                     incoming().guruId == existing().guruId &&
                     incoming().createdAt == existing().createdAt &&
-                    incoming().diff(existing()).affectedKeys().hasOnly(['score', 'interest', 'answers', 'studentName', 'updatedAt']) &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['score', 'interest', 'answers', 'studentName', 'studentId', 'updatedAt']) &&
                     (
                       existing().studentId == request.auth.uid ||
-                      existing().guruId == request.auth.uid
+                      existing().guruId == request.auth.uid ||
+                      (existing().studentId.matches('^manual-.*') && existing().score == null)
                     );
                     
       allow delete: if isVerified() &&

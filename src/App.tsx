@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Shuffle, ClipboardList, LayoutGrid, Plus, Trash2, Award, Info, Compass, PieChart, BrainCircuit, Loader2, ArrowRight, Download, LogOut } from 'lucide-react';
+import { Users, Shuffle, ClipboardList, LayoutGrid, Plus, Trash2, Award, Info, Compass, PieChart, BrainCircuit, Loader2, ArrowRight, Download, LogOut, ChevronDown } from 'lucide-react';
 import { Student, Group, Assessment } from './types';
 import StudentPortal from './components/StudentPortal';
 import { generateAssessmentInfo } from './services/geminiService';
@@ -83,6 +83,7 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [availableAssessments, setAvailableAssessments] = useState<(Assessment & { guruName?: string })[]>([]);
   const [selectedAssessmentForSiswa, setSelectedAssessmentForSiswa] = useState<Assessment | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     if (role === 'siswa') {
@@ -160,7 +161,15 @@ export default function App() {
       return;
     }
     if (!user) {
-      await signInWithGoogle();
+      try {
+        await signInWithGoogle();
+      } catch (err: any) {
+        if (err.code === 'auth/popup-closed-by-user') {
+          console.warn("User closed the popup.");
+        } else {
+          console.error(err);
+        }
+      }
       return;
     }
     try {
@@ -183,7 +192,15 @@ export default function App() {
   };
 
   const handleLogin = async () => {
-    await signInWithGoogle();
+    try {
+      await signInWithGoogle();
+    } catch (err: any) {
+      if (err.code === 'auth/popup-closed-by-user') {
+        console.warn("User closed the popup.");
+      } else {
+        console.error(err);
+      }
+    }
   };
 
   const handleLogout = async () => {
@@ -222,7 +239,7 @@ export default function App() {
 
   const handleCreateManual = () => {
     saveAssessmentToFirestore({
-      id: generateId(),
+      id: assessment?.id || generateId(),
       topic: 'Ujian Kustom',
       subject: '',
       grade: '',
@@ -253,6 +270,31 @@ export default function App() {
     const targetAssessment = role === 'siswa' ? selectedAssessmentForSiswa : assessment;
     if (user && targetAssessment && targetAssessment.id) {
       try {
+        const resultsCol = collection(db, 'assessments', targetAssessment.id, 'results');
+        const qFind = query(resultsCol, where('studentName', '==', name));
+        let existingDoc = null;
+        try {
+           const snap = await getDocs(qFind);
+           if (!snap.empty) existingDoc = snap.docs[0];
+        } catch(e) {
+           console.log("Could not query existing student", e);
+        }
+
+        if (existingDoc) {
+          const { studentId } = existingDoc.data();
+          if (studentId.startsWith('manual-') || studentId === user.uid) {
+             const { updateDoc } = await import('firebase/firestore');
+             await updateDoc(existingDoc.ref, {
+               score,
+               interest,
+               studentId: user.uid,
+               updatedAt: Date.now()
+             });
+             return;
+          }
+        }
+
+        // If no match or not allowed, create new
         const resultId = generateId();
         const docRef = doc(db, 'assessments', targetAssessment.id, 'results', resultId);
         await setDoc(docRef, {
@@ -278,7 +320,7 @@ export default function App() {
     setIsGenerating(true);
     try {
       const data = await generateAssessmentInfo(topicInput.trim(), subjectInput.trim(), gradeInput.trim(), numQuestions, numSurveyOptions, includePretest, includeSurvey);
-      saveAssessmentToFirestore(data);
+      saveAssessmentToFirestore({ ...data, id: assessment?.id });
       alert("Soal berhasil dibuat oleh AI!");
       setTopicInput('');
       setSubjectInput('');
@@ -667,52 +709,51 @@ export default function App() {
           </div>
         </div>
         
-        {/* Navigation Tabs */}
-        <div className="max-w-5xl mx-auto px-4 flex overflow-x-auto hide-scrollbar border-b border-neutral-100">
-          <nav className="flex space-x-1 sm:space-x-4">
-            <TabButton 
-              active={activeTab === 'students'} 
-              onClick={() => setActiveTab('students')}
-              icon={<Users className="w-4 h-4" />}
-              label="Data Siswa"
-            />
-            <TabButton 
-              active={activeTab === 'pretest'} 
-              onClick={() => setActiveTab('pretest')}
-              icon={<ClipboardList className="w-4 h-4" />}
-              label="Input Pretest"
-            />
-            <TabButton 
-              active={activeTab === 'survei'} 
-              onClick={() => setActiveTab('survei')}
-              icon={<Compass className="w-4 h-4" />}
-              label="Survei Minat"
-            />
-            <div className="w-px bg-neutral-200 my-2 mx-2"></div>
-            <TabButton 
-              active={activeTab === 'ai'} 
-              onClick={() => setActiveTab('ai')}
-              icon={<BrainCircuit className="w-4 h-4" />}
-              label="Generate Soal (AI)"
-            />
-            <TabButton 
-              active={activeTab === 'random'} 
-              onClick={() => setActiveTab('random')}
-              icon={<Shuffle className="w-4 h-4" />}
-              label="Acak (Asal)"
-            />
-            <TabButton 
-              active={activeTab === 'hetero'} 
-              onClick={() => setActiveTab('hetero')}
-              icon={<Award className="w-4 h-4" />}
-              label="Heterogen"
-            />
-            <TabButton 
-              active={activeTab === 'homogen'} 
-              onClick={() => setActiveTab('homogen')}
-              icon={<PieChart className="w-4 h-4" />}
-              label="Homogen (Minat)"
-            />
+        {/* Navigation Tabs - Desktop & Mobile */}
+        <div className="relative max-w-5xl mx-auto px-4 py-3 border-b border-neutral-100 bg-white/50 backdrop-blur-sm z-20">
+          
+          {/* Mobile View */}
+          <div className="block lg:hidden relative">
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="w-full flex items-center justify-between bg-white border border-neutral-200 px-4 py-3 rounded-xl font-semibold text-neutral-800 shadow-sm"
+            >
+              <div className="flex items-center space-x-2">
+                {activeTab === 'students' && <><Users className="w-5 h-5 text-indigo-600" /><span>Data Siswa</span></>}
+                {activeTab === 'pretest' && <><ClipboardList className="w-5 h-5 text-indigo-600" /><span>Input Pretest</span></>}
+                {activeTab === 'survei' && <><Compass className="w-5 h-5 text-indigo-600" /><span>Survei Minat</span></>}
+                {activeTab === 'ai' && <><BrainCircuit className="w-5 h-5 text-indigo-600" /><span>AI Soal</span></>}
+                {activeTab === 'random' && <><Shuffle className="w-5 h-5 text-indigo-600" /><span>Acak</span></>}
+                {activeTab === 'hetero' && <><Award className="w-5 h-5 text-indigo-600" /><span>Heterogen</span></>}
+                {activeTab === 'homogen' && <><PieChart className="w-5 h-5 text-indigo-600" /><span>Homogen</span></>}
+              </div>
+              <ChevronDown className={`w-5 h-5 text-neutral-500 transition-transform ${isMobileMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+            
+            {isMobileMenuOpen && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-neutral-100 shadow-xl rounded-xl p-2 flex flex-col space-y-1">
+                <MobileTabButton active={activeTab === 'students'} onClick={() => { setActiveTab('students'); setIsMobileMenuOpen(false); }} icon={<Users className="w-4 h-4" />} label="Data Siswa" />
+                <MobileTabButton active={activeTab === 'pretest'} onClick={() => { setActiveTab('pretest'); setIsMobileMenuOpen(false); }} icon={<ClipboardList className="w-4 h-4" />} label="Input Pretest" />
+                <MobileTabButton active={activeTab === 'survei'} onClick={() => { setActiveTab('survei'); setIsMobileMenuOpen(false); }} icon={<Compass className="w-4 h-4" />} label="Survei Minat" />
+                <div className="h-px bg-neutral-100 my-1 mx-2 shrink-0 rounded-full"></div>
+                <MobileTabButton active={activeTab === 'ai'} onClick={() => { setActiveTab('ai'); setIsMobileMenuOpen(false); }} icon={<BrainCircuit className="w-4 h-4" />} label="AI Soal" />
+                <MobileTabButton active={activeTab === 'random'} onClick={() => { setActiveTab('random'); setIsMobileMenuOpen(false); }} icon={<Shuffle className="w-4 h-4" />} label="Acak" />
+                <MobileTabButton active={activeTab === 'hetero'} onClick={() => { setActiveTab('hetero'); setIsMobileMenuOpen(false); }} icon={<Award className="w-4 h-4" />} label="Heterogen" />
+                <MobileTabButton active={activeTab === 'homogen'} onClick={() => { setActiveTab('homogen'); setIsMobileMenuOpen(false); }} icon={<PieChart className="w-4 h-4" />} label="Homogen" />
+              </div>
+            )}
+          </div>
+
+          {/* Desktop View */}
+          <nav className="hidden lg:flex flex-wrap gap-2 items-center">
+            <TabButton active={activeTab === 'students'} onClick={() => setActiveTab('students')} icon={<Users className="w-4 h-4" />} label="Data Siswa" />
+            <TabButton active={activeTab === 'pretest'} onClick={() => setActiveTab('pretest')} icon={<ClipboardList className="w-4 h-4" />} label="Input Pretest" />
+            <TabButton active={activeTab === 'survei'} onClick={() => setActiveTab('survei')} icon={<Compass className="w-4 h-4" />} label="Survei Minat" />
+            <div className="w-px h-6 bg-neutral-200 mx-2 shrink-0 rounded-full"></div>
+            <TabButton active={activeTab === 'ai'} onClick={() => setActiveTab('ai')} icon={<BrainCircuit className="w-4 h-4" />} label="AI Soal" />
+            <TabButton active={activeTab === 'random'} onClick={() => setActiveTab('random')} icon={<Shuffle className="w-4 h-4" />} label="Acak" />
+            <TabButton active={activeTab === 'hetero'} onClick={() => setActiveTab('hetero')} icon={<Award className="w-4 h-4" />} label="Heterogen" />
+            <TabButton active={activeTab === 'homogen'} onClick={() => setActiveTab('homogen')} icon={<PieChart className="w-4 h-4" />} label="Homogen" />
           </nav>
         </div>
       </header>
@@ -724,7 +765,7 @@ export default function App() {
         {activeTab === 'ai' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
              {!assessment && (
-               <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-8 text-center max-w-2xl mx-auto">
+               <div className="card border border-neutral-100 p-8 text-center max-w-2xl mx-auto">
                   <div className="bg-indigo-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                     <BrainCircuit className="w-8 h-8 text-indigo-600" />
                   </div>
@@ -811,7 +852,7 @@ export default function App() {
                     <button
                       onClick={handleGenerateAssessment}
                       disabled={isGenerating || !topicInput.trim()}
-                      className="w-full bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center justify-center shadow-md shadow-indigo-600/20"
+                      className="w-full btn-primary disabled:opacity-50 transition-colors flex items-center justify-center shadow-md shadow-indigo-600/20"
                     >
                       {isGenerating ? (
                         <>
@@ -838,7 +879,7 @@ export default function App() {
                     <button
                       onClick={handleCreateManual}
                       disabled={isGenerating}
-                      className="w-full bg-white text-indigo-600 border-2 border-indigo-100 px-6 py-3 rounded-xl font-bold hover:bg-indigo-50 transition-colors flex items-center justify-center"
+                      className="w-full btn-secondary flex items-center justify-center"
                     >
                       <Plus className="w-5 h-5 mr-2" />
                       Buat Ujian & Survei Manual
@@ -849,7 +890,7 @@ export default function App() {
 
              {/* PREVIEW HASIL */}
              {assessment && !isEditingAssessment && (
-               <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-8 max-w-2xl mx-auto animate-in zoom-in-95">
+               <div className="card border border-neutral-100 p-8 max-w-2xl mx-auto animate-in zoom-in-95">
                  <div className="flex justify-between items-center border-b pb-4 mb-6">
                     <h3 className="text-xl font-bold text-neutral-800">Preview: {assessment.topic}</h3>
                     <div className="flex items-center gap-3">
@@ -925,7 +966,7 @@ export default function App() {
         {/* TAB 1: DATA SISWA */}
         {activeTab === 'students' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div className="card border border-neutral-100 p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-semibold">Manajemen Siswa</h2>
                 {students.length > 0 && (
@@ -975,7 +1016,7 @@ export default function App() {
                   <button 
                     type="submit"
                     disabled={!newStudentName.trim()}
-                    className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center"
+                    className="btn-primary disabled:opacity-50 flex items-center"
                   >
                     <Plus className="w-5 h-5 mr-1" />
                     Tambah
@@ -992,7 +1033,7 @@ export default function App() {
                   <button 
                     onClick={addBulkStudents}
                     disabled={!bulkInput.trim()}
-                    className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center w-full justify-center"
+                    className="btn-primary w-full flex items-center justify-center disabled:opacity-50"
                   >
                     <Plus className="w-5 h-5 mr-1" />
                     Tambahkan Semua
@@ -1060,7 +1101,7 @@ export default function App() {
                   </div>
                   <button 
                     onClick={generateRandomGroups}
-                    className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition-colors flex items-center"
+                    className="btn-primary flex items-center"
                   >
                     <Shuffle className="w-4 h-4 mr-2" />
                     Acak Sekarang
@@ -1226,7 +1267,7 @@ export default function App() {
                  </div>
                  <button 
                    onClick={generateHeteroGroups}
-                   className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition-colors flex items-center shadow-sm"
+                   className="btn-primary flex items-center"
                  >
                    <Award className="w-4 h-4 mr-2" />
                    Bentuk Kelompok
@@ -1277,7 +1318,7 @@ export default function App() {
                  </div>
                  <button 
                    onClick={generateInterestGroups}
-                   className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition-colors flex items-center shadow-sm whitespace-nowrap"
+                   className="btn-primary flex items-center whitespace-nowrap"
                  >
                    <PieChart className="w-4 h-4 mr-2" />
                    Kelompokkan
@@ -1314,13 +1355,31 @@ function TabButton({ active, onClick, icon, label }: { active: boolean, onClick:
   return (
     <button
       onClick={onClick}
-      className={`flex items-center space-x-2 px-4 py-4 border-b-2 text-sm font-medium whitespace-nowrap transition-colors ${
+      className={`flex items-center space-x-2 px-4 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap transition-all duration-200 ${
         active 
-          ? 'border-indigo-600 text-indigo-600' 
-          : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'
+          ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' 
+          : 'bg-transparent text-neutral-600 hover:bg-neutral-100/80 hover:text-neutral-900'
       }`}
     >
       {icon}
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function MobileTabButton({ active, onClick, icon, label }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-semibold w-full text-left transition-colors ${
+        active 
+          ? 'bg-indigo-50 text-indigo-700' 
+          : 'bg-transparent text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
+      }`}
+    >
+      <div className={`${active ? 'text-indigo-600' : 'text-neutral-400'}`}>
+        {icon}
+      </div>
       <span>{label}</span>
     </button>
   );
@@ -1335,7 +1394,7 @@ interface GroupCardProps {
 
 function GroupCard({ group, showScore = false, averageScore = '', showInterest = false }: GroupCardProps) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden flex flex-col h-full animate-in zoom-in-95 duration-300">
+    <div className="card border border-neutral-100 overflow-hidden flex flex-col h-full animate-in zoom-in-95 duration-300">
       <div className="px-5 py-4 border-b border-neutral-200 bg-neutral-50/80 flex justify-between items-center">
         <h3 className="font-semibold text-neutral-800">{group.name}</h3>
         <span className="text-xs font-semibold px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full">
