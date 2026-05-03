@@ -276,6 +276,9 @@ export default function StudentPortal({ assessment, existingStudents, onSubmit, 
           </div>
         )}
       </div>
+      <div className="absolute bottom-4 left-0 w-full text-center text-neutral-400 text-sm font-medium pb-4">
+        Copyright @2026 - Imam Rohman, S.Kom.
+      </div>
     </div>
   );
 }

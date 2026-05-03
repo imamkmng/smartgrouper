@@ -6,7 +6,7 @@ import { generateAssessmentInfo } from './services/geminiService';
 import AssessmentEditor from './components/AssessmentEditor';
 import { auth, db, signInWithGoogle, signInAnonymously, signOut as handleSignOut, handleFirestoreError } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc, setDoc, query, collection, where, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, query, collection, where, onSnapshot, deleteDoc, getDocs } from 'firebase/firestore';
 
 // Helper to generate a unique ID
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -18,15 +18,45 @@ export default function App() {
 
   const [role, setRole] = useState<'landing' | 'guru' | 'siswa'>('landing');
   const [activeTab, setActiveTab] = useState<'students' | 'pretest' | 'survei' | 'random' | 'hetero' | 'homogen' | 'ai'>('students');
-  const [students, setStudents] = useState<Student[]>(() => {
-    const saved = localStorage.getItem('students_data');
-    return saved ? JSON.parse(saved) : [];
-  });
-  
-  const [assessment, setAssessment] = useState<Assessment | null>(() => {
-    const saved = localStorage.getItem('assessment_data');
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [students, setStudents] = useState<Student[]>([]);
+  const [assessment, setAssessment] = useState<Assessment | null>(null);
+
+  useEffect(() => {
+    if (role === 'guru' && user) {
+      const q = query(collection(db, 'assessments'), where('createdBy', '==', user.uid));
+      const unsub = onSnapshot(q, (snapshot) => {
+        if (!snapshot.empty) {
+          const docData = snapshot.docs[0];
+          setAssessment({ id: docData.id, ...docData.data() } as Assessment);
+          
+          // Also listen to results for this assessment
+          const resultsQ = query(collection(db, 'assessments', docData.id, 'results'));
+          const unsubResults = onSnapshot(resultsQ, (resSnapshot) => {
+             const studentResults: Student[] = [];
+             resSnapshot.forEach(rDoc => {
+               const data = rDoc.data();
+               studentResults.push({
+                 id: data.studentId || rDoc.id,
+                 name: data.studentName,
+                 score: data.score,
+                 interest: data.interest
+               });
+             });
+             setStudents(studentResults);
+          }, (err) => {
+             console.error("Error fetching results: ", err);
+          });
+          return () => unsubResults();
+        } else {
+          setAssessment(null);
+          setStudents([]);
+        }
+      }, (error) => {
+        handleFirestoreError(error, 'list' as any, 'assessments');
+      });
+      return () => unsub();
+    }
+  }, [role, user]);
 
   const [isEditingAssessment, setIsEditingAssessment] = useState(false);
 
@@ -48,6 +78,24 @@ export default function App() {
   const [includePretest, setIncludePretest] = useState(true);
   const [includeSurvey, setIncludeSurvey] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [availableAssessments, setAvailableAssessments] = useState<(Assessment & { guruName?: string })[]>([]);
+  const [selectedAssessmentForSiswa, setSelectedAssessmentForSiswa] = useState<Assessment | null>(null);
+
+  useEffect(() => {
+    if (role === 'siswa') {
+      const q = query(collection(db, 'assessments'));
+      const unsub = onSnapshot(q, (snapshot) => {
+        const assessments: any[] = [];
+        snapshot.forEach(doc => {
+          assessments.push({ id: doc.id, ...doc.data() });
+        });
+        setAvailableAssessments(assessments);
+      }, (error) => {
+        handleFirestoreError(error, 'list' as any, 'assessments');
+      });
+      return () => unsub();
+    }
+  }, [role]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
@@ -149,6 +197,7 @@ export default function App() {
           ...newAssessment,
           id,
           createdBy: user.uid,
+          guruName: user.displayName || 'Guru',
           createdAt: newAssessment.createdAt || Date.now(),
           updatedAt: Date.now()
         });
@@ -198,14 +247,15 @@ export default function App() {
     setStudents(newStudents);
 
     // save to firestore
-    if (user && assessment && assessment.id) {
+    const targetAssessment = role === 'siswa' ? selectedAssessmentForSiswa : assessment;
+    if (user && targetAssessment && targetAssessment.id) {
       try {
         const resultId = generateId();
-        const docRef = doc(db, 'assessments', assessment.id, 'results', resultId);
+        const docRef = doc(db, 'assessments', targetAssessment.id, 'results', resultId);
         await setDoc(docRef, {
-          assessmentId: assessment.id,
+          assessmentId: targetAssessment.id,
           studentId: user.uid,
-          guruId: assessment.createdBy || '',
+          guruId: targetAssessment.createdBy || '',
           studentName: name,
           score,
           interest,
@@ -214,7 +264,7 @@ export default function App() {
           updatedAt: Date.now()
         });
       } catch (e) {
-        console.error(e);
+        handleFirestoreError(e, 'create' as any, 'results');
       }
     }
   };
@@ -253,7 +303,7 @@ export default function App() {
               <LayoutGrid className="w-10 h-10" />
            </div>
            <h1 className="text-4xl font-extrabold text-neutral-900 tracking-tight">SmartGrouper</h1>
-           <p className="text-neutral-500 mt-2 text-lg font-medium">Bentuk Kelompok Cerdas berbasis Pretest & Minat AI</p>
+           <p className="text-neutral-500 mt-2 text-lg font-medium">Bentuk Kelompok Cerdas berbasis Pretest & Minat</p>
         </div>
         <div className="bg-white/80 backdrop-blur-xl p-8 rounded-2xl shadow-xl shadow-indigo-900/5 max-w-md w-full border border-white relative z-10">
           <h2 className="text-lg font-bold text-neutral-800 text-center mb-2">{user ? `Halo, ${user.displayName || 'Pengguna'}!` : 'Halo!'}</h2>
@@ -291,17 +341,62 @@ export default function App() {
             </button>
           </div>
         </div>
+
+        <div className="absolute bottom-4 text-center w-full z-10 text-neutral-400 text-sm font-medium">
+          Copyright @2026 - Imam Rohman, S.Kom.
+        </div>
       </div>
     );
   }
 
   if (role === 'siswa') {
+    if (!selectedAssessmentForSiswa) {
+      return (
+        <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-4 font-sans">
+          <div className="bg-white p-8 rounded-xl shadow-sm border border-neutral-200 max-w-lg w-full">
+            <h2 className="text-2xl font-bold text-center text-neutral-800 mb-6">Pilih Ujian / Guru</h2>
+            {availableAssessments.length === 0 ? (
+              <p className="text-center text-neutral-500 mb-6">Belum ada ujian yang tersedia saat ini.</p>
+            ) : (
+              <div className="space-y-4 mb-6">
+                {availableAssessments.map(a => (
+                  <button
+                    key={a.id}
+                    onClick={() => setSelectedAssessmentForSiswa(a)}
+                    className="w-full text-left p-4 rounded-xl border border-neutral-200 hover:border-indigo-600 hover:bg-indigo-50 transition-all flex flex-col"
+                  >
+                    <span className="font-bold text-lg text-neutral-900">{a.topic}</span>
+                    <span className="text-sm text-neutral-500 mt-1">Guru: {a.guruName || 'Unknown'}</span>
+                    {(a.subject || a.grade) && (
+                      <span className="text-xs text-neutral-400 mt-1">
+                        {a.subject ? `Mapel: ${a.subject}` : ''} {a.grade ? `Kelas: ${a.grade}` : ''}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="text-center">
+              <button onClick={handleLogout} className="text-sm text-red-600 hover:text-red-700 font-medium">
+                Keluar
+              </button>
+            </div>
+          </div>
+          <div className="absolute bottom-4 left-0 w-full text-center text-neutral-400 text-sm font-medium pb-4">
+            Copyright @2026 - Imam Rohman, S.Kom.
+          </div>
+        </div>
+      );
+    }
+
     return (
       <StudentPortal 
-        assessment={assessment} 
+        assessment={selectedAssessmentForSiswa} 
         existingStudents={students}
         onSubmit={saveStudentAssessment}
-        onBack={handleLogout}
+        onBack={() => {
+          setSelectedAssessmentForSiswa(null);
+        }}
       />
     );
   }
@@ -309,36 +404,79 @@ export default function App() {
   // --- Guru View ---
 
   // --- Student Management ---
-  const addStudent = (e?: React.FormEvent) => {
+  const addStudent = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!newStudentName.trim()) return;
+    if (!newStudentName.trim() || !assessment || !user) return;
     
-    setStudents([...students, { id: generateId(), name: newStudentName.trim(), score: null }]);
-    setNewStudentName('');
+    // Save to firestore
+    try {
+      const resultId = generateId();
+      const docRef = doc(db, 'assessments', assessment.id, 'results', resultId);
+      await setDoc(docRef, {
+        assessmentId: assessment.id,
+        studentId: `manual-${resultId}`,
+        guruId: assessment.createdBy,
+        studentName: newStudentName.trim(),
+        score: null,
+        interest: '',
+        answers: {},
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      });
+      setNewStudentName('');
+    } catch (e) {
+      handleFirestoreError(e, 'create' as any, 'results');
+    }
   };
 
-  const addBulkStudents = () => {
+  const addBulkStudents = async () => {
+    if (!assessment || !user) return;
     const names = bulkInput.split('\n').filter(n => n.trim() !== '');
-    const newStudents = names.map(name => ({
-      id: generateId(),
-      name: name.trim(),
-      score: null
-    }));
-    setStudents([...students, ...newStudents]);
-    setBulkInput('');
-    setIsBulkMode(false);
+    try {
+      for (const name of names) {
+        const resultId = generateId();
+        const docRef = doc(db, 'assessments', assessment.id, 'results', resultId);
+        await setDoc(docRef, {
+          assessmentId: assessment.id,
+          studentId: `manual-${resultId}`,
+          guruId: assessment.createdBy,
+          studentName: name.trim(),
+          score: null,
+          interest: '',
+          answers: {},
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        });
+      }
+      setBulkInput('');
+      setIsBulkMode(false);
+    } catch (e) {
+      handleFirestoreError(e, 'create' as any, 'results');
+    }
   };
 
-  const removeStudent = (id: string) => {
-    setStudents(students.filter(s => s.id !== id));
+  const removeStudent = async (id: string) => {
+    if (!assessment) return;
+    try {
+      await deleteDoc(doc(db, 'assessments', assessment.id, 'results', id));
+    } catch (e) {
+      handleFirestoreError(e, 'delete' as any, 'results');
+    }
   };
 
-  const clearStudents = () => {
+  const clearStudents = async () => {
+    if (!assessment) return;
     if (confirm('Yakin ingin menghapus semua data siswa?')) {
-      setStudents([]);
-      setRandomGroups([]);
-      setHeteroGroups([]);
-      setInterestGroups([]);
+       try {
+         for (const s of students) {
+           await deleteDoc(doc(db, 'assessments', assessment.id, 'results', s.id));
+         }
+         setRandomGroups([]);
+         setHeteroGroups([]);
+         setInterestGroups([]);
+       } catch (e) {
+         handleFirestoreError(e, 'delete' as any, 'results');
+       }
     }
   };
 
@@ -370,13 +508,29 @@ export default function App() {
   };
 
   // --- Pretest & Survei Management ---
-  const updateScore = (id: string, score: string) => {
+  const updateScore = async (id: string, score: string) => {
+    if (!assessment) return;
     const parsedScore = score === '' ? null : Number(score);
-    setStudents(students.map(s => s.id === id ? { ...s, score: parsedScore } : s));
+    try {
+      await setDoc(doc(db, 'assessments', assessment.id, 'results', id), {
+        score: parsedScore,
+        updatedAt: Date.now()
+      }, { merge: true });
+    } catch (e) {
+      handleFirestoreError(e, 'update' as any, 'results');
+    }
   };
   
-  const updateInterest = (id: string, interest: string) => {
-    setStudents(students.map(s => s.id === id ? { ...s, interest: interest } : s));
+  const updateInterest = async (id: string, interest: string) => {
+    if (!assessment) return;
+    try {
+      await setDoc(doc(db, 'assessments', assessment.id, 'results', id), {
+        interest: interest,
+        updatedAt: Date.now()
+      }, { merge: true });
+    } catch (e) {
+      handleFirestoreError(e, 'update' as any, 'results');
+    }
   };
 
   // --- Grouping Logic ---
@@ -1144,6 +1298,9 @@ export default function App() {
         )}
 
       </main>
+      <div className="w-full text-center text-neutral-400 text-sm font-medium pb-4 mt-8">
+        Copyright @2026 - Imam Rohman, S.Kom.
+      </div>
     </div>
   );
 }

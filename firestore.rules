@@ -55,6 +55,7 @@ service cloud.firestore {
              data.topic is string && data.topic.size() <= 200 &&
              data.createdBy is string && data.createdBy.size() <= 128 &&
              data.createdAt is number && data.updatedAt is number &&
+             data.get('guruName', '') is string && data.get('guruName', '').size() <= 100 &&
              data.get('subject', '') is string && data.get('subject', '').size() <= 100 &&
              data.get('grade', '') is string && data.get('grade', '').size() <= 50 &&
              data.get('includePretest', false) is bool &&
@@ -65,7 +66,7 @@ service cloud.firestore {
 
     match /assessments/{assessmentId} {
       allow get: if isVerified(); 
-      allow list: if isVerified() && resource.data.createdBy == request.auth.uid;
+      allow list: if isVerified();
       
       allow create: if isVerified() &&
                     isValidId(assessmentId) &&
@@ -79,7 +80,7 @@ service cloud.firestore {
                     existing().createdBy == request.auth.uid &&
                     incoming().createdBy == existing().createdBy &&
                     incoming().createdAt == existing().createdAt &&
-                    incoming().diff(existing()).affectedKeys().hasOnly(['id', 'topic', 'subject', 'grade', 'questions', 'surveyOptions', 'includePretest', 'includeSurvey', 'updatedAt']);
+                    incoming().diff(existing()).affectedKeys().hasOnly(['id', 'topic', 'guruName', 'subject', 'grade', 'questions', 'surveyOptions', 'includePretest', 'includeSurvey', 'updatedAt']);
                     
       allow delete: if isVerified() &&
                     isValidId(assessmentId) &&
@@ -92,7 +93,7 @@ service cloud.firestore {
              data.studentId is string && data.studentId.size() <= 128 &&
              data.guruId is string && data.guruId.size() <= 128 &&
              data.get('studentName', '') is string && data.get('studentName', '').size() <= 100 &&
-             data.get('score', 0) is number &&
+             (data.get('score', 0) is number || data.get('score', null) == null) &&
              data.get('interest', '') is string && data.get('interest', '').size() <= 100 &&
              data.createdAt is number && data.updatedAt is number;
     }
@@ -112,23 +113,31 @@ service cloud.firestore {
                     isValidId(assessmentId) &&
                     isValidId(resultId) &&
                     isValidResult(incoming()) &&
-                    incoming().studentId == request.auth.uid &&
                     incoming().assessmentId == assessmentId &&
                     get(/databases/$(database)/documents/assessments/$(assessmentId)).data.createdBy == incoming().guruId &&
-                    get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['siswa', 'guru'];
+                    (
+                      incoming().studentId == request.auth.uid ||
+                      (incoming().guruId == request.auth.uid && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'guru')
+                    );
                     
       allow update: if isVerified() &&
                     isValidId(assessmentId) &&
                     isValidId(resultId) &&
                     isValidResult(incoming()) &&
-                    existing().studentId == request.auth.uid &&
                     incoming().studentId == existing().studentId &&
                     incoming().assessmentId == existing().assessmentId &&
                     incoming().guruId == existing().guruId &&
                     incoming().createdAt == existing().createdAt &&
-                    incoming().diff(existing()).affectedKeys().hasOnly(['score', 'interest', 'answers', 'studentName', 'updatedAt']);
+                    incoming().diff(existing()).affectedKeys().hasOnly(['score', 'interest', 'answers', 'studentName', 'updatedAt']) &&
+                    (
+                      existing().studentId == request.auth.uid ||
+                      existing().guruId == request.auth.uid
+                    );
                     
-      allow delete: if false; 
+      allow delete: if isVerified() &&
+                    isValidId(assessmentId) &&
+                    isValidId(resultId) &&
+                    existing().guruId == request.auth.uid; 
     }
   }
 }
