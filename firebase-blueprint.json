@@ -1,0 +1,66 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile containing role",
+      "type": "object",
+      "properties": {
+        "role": { "type": "string", "enum": ["guru", "siswa"] },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["role", "name", "createdAt", "updatedAt"]
+    },
+    "Assessment": {
+      "title": "Assessment",
+      "description": "An assessment created by a Guru",
+      "type": "object",
+      "properties": {
+        "topic": { "type": "string" },
+        "subject": { "type": "string" },
+        "grade": { "type": "string" },
+        "questions": { "type": "array" },
+        "surveyOptions": { "type": "array" },
+        "includePretest": { "type": "boolean" },
+        "includeSurvey": { "type": "boolean" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["topic", "createdBy", "createdAt", "updatedAt"]
+    },
+    "AssessmentResult": {
+      "title": "AssessmentResult",
+      "description": "A student's result for an assessment",
+      "type": "object",
+      "properties": {
+        "assessmentId": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "score": { "type": "number" },
+        "interest": { "type": "string" },
+        "answers": { "type": "object" },
+        "guruId": { "type": "string", "description": "The creator of the assessment, used for security rules" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["assessmentId", "studentId", "guruId", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles"
+    },
+    "/assessments/{assessmentId}": {
+      "schema": { "$ref": "#/entities/Assessment" },
+      "description": "Assessments directory"
+    },
+    "/assessments/{assessmentId}/results/{resultId}": {
+      "schema": { "$ref": "#/entities/AssessmentResult" },
+      "description": "Student results for a specific assessment"
+    }
+  }
+}

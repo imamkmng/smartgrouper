@@ -1,0 +1,6 @@
+{
+  "name": "SmartGrouper",
+  "description": "Aplikasi untuk membuat kelompok siswa secara acak (Kelompok Asal) dan heterogen berdasarkan nilai pretest.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
