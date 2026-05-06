@@ -23,6 +23,7 @@ export interface Assessment {
   topic: string;
   subject?: string;
   grade?: string;
+  durationMinutes?: number;
   questions: Question[];
   surveyOptions: string[];
   includePretest: boolean;

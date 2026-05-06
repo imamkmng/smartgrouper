@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Assessment, Student } from '../types';
-import { CheckCircle, AlertCircle, ArrowRight } from 'lucide-react';
+import { CheckCircle, AlertCircle, ArrowRight, Clock } from 'lucide-react';
 
 interface StudentPortalProps {
   assessment: Assessment | null;
@@ -16,6 +16,22 @@ export default function StudentPortal({ assessment, existingStudents, onSubmit, 
   const [interest, setInterest] = useState<string>('');
   const [isCustomInterest, setIsCustomInterest] = useState(false);
   const [customInterestValue, setCustomInterestValue] = useState('');
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (step === 'pretest' || step === 'survey') {
+       if (timeLeft === 0) {
+          handleSubmitAll();
+          return;
+       }
+       if (timeLeft !== null && timeLeft > 0) {
+          const t = setTimeout(() => {
+             setTimeLeft(timeLeft - 1);
+          }, 1000);
+          return () => clearTimeout(t);
+       }
+    }
+  }, [step, timeLeft]);
 
   const handleStart = (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,6 +41,10 @@ export default function StudentPortal({ assessment, existingStudents, onSubmit, 
     if (exist) {
       setStep('done');
       return;
+    }
+
+    if (assessment?.durationMinutes) {
+       setTimeLeft(assessment.durationMinutes * 60);
     }
 
     if (assessment?.includePretest) {
@@ -51,7 +71,8 @@ export default function StudentPortal({ assessment, existingStudents, onSubmit, 
   const handleSubmitAll = () => {
     if (!assessment) return;
     
-    if (assessment.includeSurvey && !interest) {
+    // allow empty survey choice if time is up, but warn otherwise if time is NOT up
+    if (timeLeft !== 0 && assessment.includeSurvey && !interest) {
       return alert("Harap pilih peminatan survei!");
     }
 
@@ -68,6 +89,12 @@ export default function StudentPortal({ assessment, existingStudents, onSubmit, 
 
     onSubmit(name.trim(), score ?? 0, interest || "-");
     setStep('done');
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
   if (!assessment) {
@@ -129,8 +156,16 @@ export default function StudentPortal({ assessment, existingStudents, onSubmit, 
                     {assessment.grade ? ` \u2022 Kelas: ${assessment.grade}` : ''}
                   </p>
                </div>
-               <div className="text-sm font-semibold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
-                  Langkah 1 dari 2
+               <div className="flex gap-2 items-center">
+                 {timeLeft !== null && (
+                   <div className={`flex items-center text-sm font-bold px-3 py-1 rounded-full ${timeLeft < 60 ? 'bg-red-50 text-red-600' : 'bg-orange-50 text-orange-600'}`}>
+                     <Clock className="w-4 h-4 mr-1" />
+                     {formatTime(timeLeft)}
+                   </div>
+                 )}
+                 <div className="text-sm font-semibold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
+                    Langkah 1 dari 2
+                 </div>
                </div>
             </div>
 
@@ -184,8 +219,16 @@ export default function StudentPortal({ assessment, existingStudents, onSubmit, 
                     {assessment.grade ? ` \u2022 Kelas: ${assessment.grade}` : ''}
                   </p>
                </div>
-               <div className="text-sm font-semibold text-purple-600 bg-purple-50 px-3 py-1 rounded-full">
-                  {assessment.includePretest ? "Langkah 2 dari 2" : "Survei Minat"}
+               <div className="flex gap-2 items-center">
+                 {timeLeft !== null && (
+                   <div className={`flex items-center text-sm font-bold px-3 py-1 rounded-full ${timeLeft < 60 ? 'bg-red-50 text-red-600' : 'bg-orange-50 text-orange-600'}`}>
+                     <Clock className="w-4 h-4 mr-1" />
+                     {formatTime(timeLeft)}
+                   </div>
+                 )}
+                 <div className="text-sm font-semibold text-purple-600 bg-purple-50 px-3 py-1 rounded-full">
+                    {assessment.includePretest ? "Langkah 2 dari 2" : "Survei Minat"}
+                 </div>
                </div>
             </div>
 

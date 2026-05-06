@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Shuffle, ClipboardList, LayoutGrid, Plus, Trash2, Award, Info, Compass, PieChart, BrainCircuit, Loader2, ArrowRight, Download, LogOut, ChevronDown } from 'lucide-react';
+import { Users, Shuffle, ClipboardList, LayoutGrid, Plus, Trash2, Award, Info, Compass, PieChart, BrainCircuit, Loader2, ArrowRight, Download, LogOut, ChevronDown, FileText, FileSpreadsheet } from 'lucide-react';
 import { Student, Group, Assessment } from './types';
 import StudentPortal from './components/StudentPortal';
 import { generateAssessmentInfo } from './services/geminiService';
@@ -7,6 +7,9 @@ import AssessmentEditor from './components/AssessmentEditor';
 import { auth, db, signInWithGoogle, signInAnonymously, signOut as handleSignOut, handleFirestoreError } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, query, collection, where, onSnapshot, deleteDoc, getDocs } from 'firebase/firestore';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // Helper to generate a unique ID
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -76,6 +79,7 @@ export default function App() {
   const [topicInput, setTopicInput] = useState('');
   const [subjectInput, setSubjectInput] = useState('');
   const [gradeInput, setGradeInput] = useState('');
+  const [durationInput, setDurationInput] = useState(30);
   const [numQuestions, setNumQuestions] = useState(5);
   const [numSurveyOptions, setNumSurveyOptions] = useState(5);
   const [includePretest, setIncludePretest] = useState(true);
@@ -84,6 +88,7 @@ export default function App() {
   const [availableAssessments, setAvailableAssessments] = useState<(Assessment & { guruName?: string })[]>([]);
   const [selectedAssessmentForSiswa, setSelectedAssessmentForSiswa] = useState<Assessment | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showHeteroScore, setShowHeteroScore] = useState(true);
 
   useEffect(() => {
     if (role === 'siswa') {
@@ -243,6 +248,7 @@ export default function App() {
       topic: 'Ujian Kustom',
       subject: '',
       grade: '',
+      durationMinutes: durationInput || 30,
       questions: [],
       surveyOptions: [],
       includePretest: true,
@@ -320,7 +326,7 @@ export default function App() {
     setIsGenerating(true);
     try {
       const data = await generateAssessmentInfo(topicInput.trim(), subjectInput.trim(), gradeInput.trim(), numQuestions, numSurveyOptions, includePretest, includeSurvey);
-      saveAssessmentToFirestore({ ...data, id: assessment?.id });
+      saveAssessmentToFirestore({ ...data, id: assessment?.id, durationMinutes: durationInput });
       alert("Soal berhasil dibuat oleh AI!");
       setTopicInput('');
       setSubjectInput('');
@@ -686,6 +692,51 @@ export default function App() {
     return group.students.length > 0 ? (sum / group.students.length).toFixed(2) : '0';
   };
 
+  const handleExportExcel = (groups: Group[], filename: string) => {
+    const data: any[] = [];
+    groups.forEach(group => {
+      group.students.forEach(student => {
+        data.push({
+          'Kelompok': group.name,
+          'Nama Siswa': student.name,
+          'Nilai Pretest': student.score !== null ? student.score : '-',
+          'Peminatan/Survei': student.interest || '-'
+        });
+      });
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Kelompok");
+    XLSX.writeFile(workbook, `${filename}.xlsx`);
+  };
+
+  const handleExportPDF = (groups: Group[], filename: string, title: string) => {
+    const doc = new jsPDF();
+    doc.text(title, 14, 15);
+    
+    const tableData: any[] = [];
+    groups.forEach(group => {
+      group.students.forEach(student => {
+        tableData.push([
+          group.name,
+          student.name,
+          student.score !== null ? student.score : '-',
+          student.interest || '-'
+        ]);
+      });
+    });
+
+    autoTable(doc, {
+      head: [['Kelompok', 'Nama Siswa', 'Nilai Pretest', 'Peminatan/Survei']],
+      body: tableData,
+      startY: 25,
+      theme: 'grid'
+    });
+
+    doc.save(`${filename}.pdf`);
+  };
+
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans selection:bg-indigo-100 selection:text-indigo-900">
       {/* Header */}
@@ -798,6 +849,17 @@ export default function App() {
                         onChange={(e) => setGradeInput(e.target.value)}
                         placeholder="Kelas (Opsional)"
                         className="flex-1 w-full rounded-xl border border-neutral-300 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all font-medium text-center"
+                        disabled={isGenerating}
+                      />
+                    </div>
+                    <div className="flex gap-4 items-center justify-center">
+                      <span className="text-sm text-neutral-600 font-medium">Durasi Pengerjaan (menit):</span>
+                      <input
+                        type="number"
+                        min="1" max="180"
+                        value={durationInput}
+                        onChange={e => setDurationInput(Number(e.target.value))}
+                        className="w-24 rounded-lg border border-neutral-300 px-3 py-2 outline-none focus:border-indigo-500 transition-all text-center"
                         disabled={isGenerating}
                       />
                     </div>
@@ -1111,10 +1173,22 @@ export default function App() {
             </div>
 
             {randomGroups.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {randomGroups.map((group) => (
-                  <GroupCard key={group.id} group={group} />
-                ))}
+              <div className="space-y-4">
+               <div className="flex justify-end gap-2">
+                 <button onClick={() => handleExportExcel(randomGroups, 'Kelompok_Acak')} className="btn-secondary text-sm flex items-center bg-white">
+                   <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" />
+                   Export Excel
+                 </button>
+                 <button onClick={() => handleExportPDF(randomGroups, 'Kelompok_Acak', 'Hasil Pemetaan Kelompok Acak')} className="btn-secondary text-sm flex items-center bg-white">
+                   <FileText className="w-4 h-4 mr-2 text-red-500" />
+                   Export PDF
+                 </button>
+               </div>
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                 {randomGroups.map((group) => (
+                   <GroupCard key={group.id} group={group} />
+                 ))}
+               </div>
               </div>
             )}
           </div>
@@ -1253,7 +1327,16 @@ export default function App() {
                  <p className="text-sm text-neutral-500 mt-1">Membagi siswa agar setiap kelompok memiliki variasi kemampuan (tinggi, sedang, rendah).</p>
                </div>
                
-               <div className="flex items-center space-x-3 w-full sm:w-auto">
+               <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                 <label className="flex items-center text-sm font-medium text-neutral-600 cursor-pointer bg-neutral-50 px-3 py-1.5 rounded-md border border-neutral-200">
+                   <input 
+                     type="checkbox" 
+                     checked={showHeteroScore}
+                     onChange={(e) => setShowHeteroScore(e.target.checked)}
+                     className="mr-2 text-indigo-600 focus:ring-indigo-500 rounded"
+                   />
+                   Tampilkan Nilai
+                 </label>
                  <div className="flex items-center">
                    <label className="text-sm font-medium mr-2 text-neutral-600">Jumlah Kelompok:</label>
                    <input 
@@ -1277,15 +1360,27 @@ export default function App() {
            </div>
 
            {heteroGroups.length > 0 && (
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-               {heteroGroups.map((group) => (
-                 <GroupCard 
-                  key={group.id} 
-                  group={group} 
-                  showScore={true} 
-                  averageScore={getAverageScore(group)} 
-                 />
-               ))}
+             <div className="space-y-4">
+               <div className="flex justify-end gap-2">
+                 <button onClick={() => handleExportExcel(heteroGroups, 'Kelompok_Heterogen')} className="btn-secondary text-sm flex items-center bg-white">
+                   <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" />
+                   Export Excel
+                 </button>
+                 <button onClick={() => handleExportPDF(heteroGroups, 'Kelompok_Heterogen', 'Hasil Pemetaan Kelompok Heterogen')} className="btn-secondary text-sm flex items-center bg-white">
+                   <FileText className="w-4 h-4 mr-2 text-red-500" />
+                   Export PDF
+                 </button>
+               </div>
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                 {heteroGroups.map((group) => (
+                   <GroupCard 
+                    key={group.id} 
+                    group={group} 
+                    showScore={showHeteroScore} 
+                    averageScore={showHeteroScore ? getAverageScore(group) : ''} 
+                   />
+                 ))}
+               </div>
              </div>
            )}
          </div>
@@ -1328,14 +1423,26 @@ export default function App() {
            </div>
 
            {interestGroups.length > 0 && (
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-               {interestGroups.map((group) => (
-                 <GroupCard 
-                  key={group.id} 
-                  group={group} 
-                  showInterest={true}
-                 />
-               ))}
+             <div className="space-y-4">
+               <div className="flex justify-end gap-2">
+                 <button onClick={() => handleExportExcel(interestGroups, 'Kelompok_Homogen')} className="btn-secondary text-sm flex items-center bg-white">
+                   <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" />
+                   Export Excel
+                 </button>
+                 <button onClick={() => handleExportPDF(interestGroups, 'Kelompok_Homogen', 'Hasil Pemetaan Kelompok Homogen (Minat)')} className="btn-secondary text-sm flex items-center bg-white">
+                   <FileText className="w-4 h-4 mr-2 text-red-500" />
+                   Export PDF
+                 </button>
+               </div>
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                 {interestGroups.map((group) => (
+                   <GroupCard 
+                    key={group.id} 
+                    group={group} 
+                    showInterest={true}
+                   />
+                 ))}
+               </div>
              </div>
            )}
          </div>

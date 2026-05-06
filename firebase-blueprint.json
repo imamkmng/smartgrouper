@@ -25,6 +25,7 @@
         "surveyOptions": { "type": "array" },
         "includePretest": { "type": "boolean" },
         "includeSurvey": { "type": "boolean" },
+        "durationMinutes": { "type": "number" },
         "createdBy": { "type": "string" },
         "createdAt": { "type": "number" },
         "updatedAt": { "type": "number" }

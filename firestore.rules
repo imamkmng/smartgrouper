@@ -58,6 +58,7 @@ service cloud.firestore {
              data.get('guruName', '') is string && data.get('guruName', '').size() <= 100 &&
              data.get('subject', '') is string && data.get('subject', '').size() <= 100 &&
              data.get('grade', '') is string && data.get('grade', '').size() <= 50 &&
+             data.get('durationMinutes', 30) is number &&
              data.get('includePretest', false) is bool &&
              data.get('includeSurvey', false) is bool &&
              data.get('questions', []).size() <= 50 &&
@@ -80,7 +81,7 @@ service cloud.firestore {
                     existing().createdBy == request.auth.uid &&
                     incoming().createdBy == existing().createdBy &&
                     incoming().createdAt == existing().createdAt &&
-                    incoming().diff(existing()).affectedKeys().hasOnly(['id', 'topic', 'guruName', 'subject', 'grade', 'questions', 'surveyOptions', 'includePretest', 'includeSurvey', 'updatedAt']);
+                    incoming().diff(existing()).affectedKeys().hasOnly(['id', 'topic', 'guruName', 'subject', 'grade', 'durationMinutes', 'questions', 'surveyOptions', 'includePretest', 'includeSurvey', 'updatedAt']);
                     
       allow delete: if isVerified() &&
                     isValidId(assessmentId) &&

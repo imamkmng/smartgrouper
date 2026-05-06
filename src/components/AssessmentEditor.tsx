@@ -68,7 +68,7 @@ export default function AssessmentEditor({ assessment, onChange, onFinish }: Ass
       </div>
 
       <div className="space-y-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-neutral-700 mb-1">Topik/Materi</label>
             <input
@@ -79,7 +79,17 @@ export default function AssessmentEditor({ assessment, onChange, onFinish }: Ass
               placeholder="Contoh: Tata Surya"
             />
           </div>
-          <div className="flex gap-4">
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-1">Durasi (Menit)</label>
+            <input
+              type="number"
+              min="1"
+              value={assessment.durationMinutes ?? 30}
+              onChange={(e) => updateField('durationMinutes', Number(e.target.value) || 30)}
+              className="w-full border border-neutral-300 rounded-lg px-3 py-2 outline-none focus:border-indigo-500"
+            />
+          </div>
+          <div className="flex gap-4 col-span-1 sm:col-span-2 lg:col-span-1">
             <div className="flex-1">
               <label className="block text-sm font-medium text-neutral-700 mb-1">Mapel <span className="text-neutral-400 font-normal">(Opsional)</span></label>
               <input
